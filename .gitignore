@@ -27,10 +27,13 @@ Thumbs.db
 .env.local
 .env.*.local
 
-# Data files
-data/raw/
-data/processed/
-*.csv
+# Data files (but include test data)
+data/
+!data/
+!data/raw/
+!data/raw/*.csv
+!data/processed/
+!data/processed/*.csv
 *.xlsx
 *.xls
 
