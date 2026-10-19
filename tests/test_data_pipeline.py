@@ -6,6 +6,7 @@ import pytest
 from src.cleaning.clean_trials import TrialDataCleaner
 from src.data_loader import apply_filters, get_data_summary
 from src.ingestion.clinical_trials_api import (
+    ClinicalTrialsAPIClient,
     extract_trial_record,
     normalize_api_phase,
     normalize_api_status,
