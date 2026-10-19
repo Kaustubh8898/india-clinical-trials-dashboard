@@ -324,7 +324,7 @@ def generate_ingestion_report(
         f"Records fetched: {total_fetched}\n"
         f"Records parsed: {total_parsed}\n"
         f"Parse success rate: {success_rate:.1f}%\n"
-        f"Failed requests: {len(failed_requests)}\n"
+        f"Failures: {len(failed_requests)}\n"
         f"Output file: {output_file}\n"
         f"API endpoint: {API_BASE_URL}\n"
     )
@@ -340,13 +340,21 @@ def generate_ingestion_report(
 def main() -> int:
     """Fetch and save raw records; run the cleaning step separately."""
     client = ClinicalTrialsAPIClient()
+    raw_studies: List[Dict[str, Any]] = []
+    parsed: List[Dict[str, Any]] = []
     try:
         raw_studies = client.fetch_india_trials()
-        parsed = [
-            record
-            for study in raw_studies
-            if (record := extract_trial_record(study)).get("nct_id")
-        ]
+        parsed = [extract_trial_record(study) for study in raw_studies]
+
+        missing_ids = sum(not record.get("nct_id") for record in parsed)
+        if missing_ids:
+            message = (
+                f"{missing_ids} of {len(raw_studies)} studies lacked an NCT ID; "
+                "refusing to write a partial dataset."
+            )
+            client.failed_requests.append({"error": message})
+            raise ValueError(message)
+
         output_path = save_trials_to_csv(parsed)
         generate_ingestion_report(
             len(raw_studies), len(parsed), client.failed_requests, output_path
@@ -355,7 +363,7 @@ def main() -> int:
     except Exception as exc:
         logger.exception("Ingestion failed: %s", exc)
         generate_ingestion_report(
-            client.total_records_fetched, 0, client.failed_requests, None
+            client.total_records_fetched, len(parsed), client.failed_requests, None
         )
         return 1
     finally:
