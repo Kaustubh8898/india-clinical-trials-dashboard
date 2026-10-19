@@ -1,0 +1,108 @@
+name: Refresh clinical-trial registry snapshot
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * 1"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/refresh_registry.yml"
+      - "src/ingestion/**"
+      - "src/cleaning/**"
+      - "requirements.txt"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: clinical-trials-registry-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install project and test dependencies
+        run: python -m pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Run regression tests
+        run: python -m pytest -q
+
+      - name: Fetch current registry records
+        run: python -m src.ingestion.clinical_trials_api
+
+      - name: Clean registry records
+        run: python -m src.cleaning.clean_trials
+
+      - name: Validate snapshot before publishing
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import pandas as pd
+
+          raw_path = Path("data/raw/india_trials_raw.csv")
+          clean_path = Path("data/processed/india_trials_clean.csv")
+          required = {
+              "nct_id", "brief_title", "sponsor", "phase", "conditions",
+              "recruitment_status", "start_date", "completion_date",
+              "enrollment_count", "city", "state", "country", "fetched_date",
+              "therapeutic_area", "trial_duration_days", "data_source", "source_url",
+              "has_indian_location",
+          }
+
+          if not raw_path.is_file() or not clean_path.is_file():
+              raise SystemExit("Ingestion or cleaning did not create both CSV files.")
+
+          raw = pd.read_csv(raw_path, dtype={"nct_id": "string"})
+          df = pd.read_csv(clean_path, dtype={"nct_id": "string"})
+          if df.empty or len(df) < 100:
+              raise SystemExit(f"Refusing to publish an unexpectedly small dataset ({len(df)} rows).")
+          missing = required - set(df.columns)
+          if missing:
+              raise SystemExit(f"Processed dataset is missing columns: {sorted(missing)}")
+          ids = df["nct_id"].astype("string").str.strip()
+          if not ids.str.fullmatch(r"NCT\\d{8}", na=False).all():
+              raise SystemExit("Processed dataset contains malformed NCT IDs.")
+          if ids.duplicated().any():
+              raise SystemExit("Processed dataset contains duplicate NCT IDs.")
+          if not df["data_source"].astype("string").eq("ClinicalTrials.gov API v2").all():
+              raise SystemExit("Processed dataset is missing the expected source marker.")
+          expected_urls = "https://clinicaltrials.gov/study/" + ids
+          if not df["source_url"].astype("string").str.strip().eq(expected_urls).all():
+              raise SystemExit("One or more source URLs do not match their NCT ID.")
+          if not df["has_indian_location"].astype("boolean").fillna(False).all():
+              raise SystemExit("At least one record lacks evidence of an Indian location.")
+          raw_ids = raw["nct_id"].astype("string").str.strip()
+          if raw_ids.duplicated().any() or len(raw) != len(raw_ids):
+              raise SystemExit("Raw dataset contains duplicate or malformed identifier rows.")
+          if not raw["data_source"].astype("string").eq("ClinicalTrials.gov API v2").all():
+              raise SystemExit("Raw dataset is missing the source marker.")
+          print(f"Validated {len(df):,} unique studies from ClinicalTrials.gov API v2.")
+          print(f"Fetch timestamp range: {df['fetched_date'].min()} through {df['fetched_date'].max()}")
+          PY
+
+      - name: Publish refreshed CSV snapshot
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/raw/india_trials_raw.csv data/processed/india_trials_clean.csv
+          if git diff --cached --quiet; then
+            echo "The registry snapshot is unchanged; no commit is needed."
+          else
+            git commit -m "Refresh ClinicalTrials.gov registry snapshot"
+            git push origin HEAD:main
+          fi
