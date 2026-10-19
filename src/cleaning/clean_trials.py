@@ -380,7 +380,7 @@ class TrialDataCleaner:
                     precision.loc[raw_values.str.fullmatch(r"\d{4}-\d{2}", na=False)] = "month"
                     precision.loc[raw_values.str.fullmatch(r"\d{4}-\d{2}-\d{2}", na=False)] = "day"
                     self.df[f"{col}_precision"] = precision
-                    self.df[col] = pd.to_datetime(raw_values, errors="coerce")
+                    self.df[col] = pd.to_datetime(raw_values, errors="coerce", format="mixed")
                     
                     null_count = self.df[col].isna().sum()
                     if null_count > 0:
