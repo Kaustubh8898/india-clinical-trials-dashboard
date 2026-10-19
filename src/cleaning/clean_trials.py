@@ -149,12 +149,12 @@ THERAPEUTIC_AREA_MAPPING = {
 }
 
 INDIAN_STATES = {
-    "maharashtra", "delhi", "karnataka", "telangana", "tamil nadu",
-    "west bengal", "gujarat", "rajasthan", "uttar pradesh", "punjab",
-    "kerala", "haryana", "madhya pradesh", "odisha", "bihar",
-    "jharkhand", "uttarakhand", "himachal pradesh", "assam",
-    "goa", "manipur", "nagaland", "tripura", "meghalaya",
-    "mizoram", "arunachal pradesh", "sikkim"
+    "andhra pradesh", "arunachal pradesh", "assam", "bihar", "chhattisgarh",
+    "goa", "gujarat", "haryana", "himachal pradesh", "jharkhand", "karnataka",
+    "kerala", "madhya pradesh", "maharashtra", "manipur", "meghalaya",
+    "mizoram", "nagaland", "odisha", "punjab", "rajasthan", "sikkim",
+    "tamil nadu", "telangana", "tripura", "uttar pradesh", "uttarakhand",
+    "west bengal", "delhi", "jammu and kashmir", "ladakh"
 }
 
 MAJOR_INDIAN_CITIES = {
