@@ -113,7 +113,7 @@ def render_overview_dashboard():
         st.metric(
             label="Active Trials",
             value=filtered_stats["active_trials"],
-            help="Includes Recruiting and Active, not recruiting. The percentage below is the share of filtered studies."
+            help="Includes Recruiting, Enrolling by invitation, and Active, not recruiting. The percentage below is the share of filtered studies."
         )
         st.caption(f"{active_share:.1f}% of filtered studies")
 
@@ -215,9 +215,9 @@ def render_sponsor_intelligence():
     total_enrollment = filtered_df["enrollment_count"].sum() if "enrollment_count" in filtered_df.columns else 0
     with col4:
         st.metric(
-            label="Total Enrollment",
+            label="Registry Enrollment Count",
             value=f"{int(total_enrollment):,}",
-            delta="Across all trials"
+            delta="Sum of registry counts"
         )
     
     st.divider()
