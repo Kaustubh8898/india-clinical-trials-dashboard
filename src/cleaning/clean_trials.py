@@ -321,10 +321,8 @@ class TrialDataCleaner:
             
             sponsor_str = str(sponsor).strip()
             
-            # Remove common suffixes
-            sponsor_str = re.sub(r"\s+(Inc\.?|Ltd\.?|Limited|LLC|Corp\.?|Corporation)\s*$", "", sponsor_str, flags=re.IGNORECASE)
-            
-            # Normalize spacing
+            # Preserve registered/legal suffixes: removing them can merge
+            # distinct sponsor entities. Normalize whitespace only.
             sponsor_str = " ".join(sponsor_str.split())
             
             return sponsor_str if sponsor_str else "Unknown"
