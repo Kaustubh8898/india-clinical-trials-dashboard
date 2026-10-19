@@ -169,3 +169,20 @@ def test_unknown_sponsor_is_not_counted_as_a_distinct_sponsor():
     summary = get_data_summary(frame)
     assert summary["total_sponsors"] == 1
     assert summary["active_sponsors"] == 1
+
+def test_fetch_rejects_incomplete_pagination(monkeypatch):
+    client = ClinicalTrialsAPIClient(page_size=1)
+    first_page = {"totalCount": 2, "studies": [_study_fixture()]}
+    monkeypatch.setattr(client, "_make_request", lambda params: first_page)
+    try:
+        with pytest.raises(RuntimeError, match="Expected 2 studies"):
+            client.fetch_india_trials()
+    finally:
+        client.close()
+
+
+def test_cleaner_preserves_legal_suffixes_in_sponsor_names():
+    cleaner = TrialDataCleaner(input_file=Path("not-used.csv"))
+    cleaner.df = pd.DataFrame({"sponsor": ["Example Ltd.", "  Example   Ltd.  "]})
+    cleaner.standardize_sponsor_names()
+    assert cleaner.df["sponsor"].tolist() == ["Example Ltd.", "Example Ltd."]
