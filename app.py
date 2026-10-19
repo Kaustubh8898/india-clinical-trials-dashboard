@@ -37,8 +37,7 @@ df, metadata = load_clinical_trials_data()
 
 # Validate data
 if not validate_and_log_data(df, metadata):
-    # Show error state
-    st.set_page_config(page_title=APP_TITLE, page_icon=APP_ICON, layout="wide")
+    # Show error state. set_page_config was already called above.
     st.title(f"{APP_ICON} {APP_TITLE}")
     
     st.error("⚠️ Error Loading Data", icon="🚨")
@@ -107,18 +106,22 @@ def render_overview_dashboard():
     col1, col2, col3, col4, col5 = st.columns(5)
     
     with col1:
-        delta_text = f"{(filtered_stats['recruiting_trials']/filtered_stats['total_trials']*100):.1f}% active" if filtered_stats['total_trials'] > 0 else "0 trials"
-        st.metric(
-            label="Total Active Trials",
-            value=filtered_stats['active_trials'],
-            delta=delta_text
+        active_share = (
+            filtered_stats["active_trials"] / filtered_stats["total_trials"] * 100
+            if filtered_stats["total_trials"] else 0
         )
-    
+        st.metric(
+            label="Active Trials",
+            value=filtered_stats["active_trials"],
+            help="Includes Recruiting, Enrolling by invitation, and Active, not recruiting. The percentage below is the share of filtered studies."
+        )
+        st.caption(f"{active_share:.1f}% of filtered studies")
+
     with col2:
         st.metric(
             label="Active Sponsors",
-            value=filtered_stats['total_sponsors'],
-            delta="Currently recruiting"
+            value=filtered_stats["active_sponsors"],
+            help="Distinct sponsors with at least one active trial in the filtered dataset."
         )
     
     with col3:
@@ -129,10 +132,14 @@ def render_overview_dashboard():
         )
     
     with col4:
+        duration_value = (
+            f"{filtered_stats['avg_duration_days']:,} days"
+            if filtered_stats["avg_duration_days"] > 0 else "N/A"
+        )
         st.metric(
             label="Avg Trial Duration",
-            value=f"{filtered_stats['avg_duration_days']} days",
-            delta="~1.9 years"
+            value=duration_value,
+            help="Mean of durations with day-precision start and completion dates only. N/A means no eligible date pairs."
         )
     
     with col5:
@@ -208,9 +215,9 @@ def render_sponsor_intelligence():
     total_enrollment = filtered_df["enrollment_count"].sum() if "enrollment_count" in filtered_df.columns else 0
     with col4:
         st.metric(
-            label="Total Enrollment",
+            label="Registry Enrollment Count",
             value=f"{int(total_enrollment):,}",
-            delta="Across all trials"
+            delta="Sum of registry counts"
         )
     
     st.divider()
@@ -720,9 +727,9 @@ def main():
         # Dashboard info
         st.markdown("### Dashboard Info")
         st.info(
-            "Real-time insights into Indian clinical trials. "
-            "Monitor trial status, sponsor activity, and recruitment metrics "
-            "across therapeutic areas and geographic regions."
+            "This dashboard analyses a dated ClinicalTrials.gov registry snapshot, "
+            "not a live feed. Refresh the ingestion and cleaning pipeline to update it. "
+            "Studies with Indian locations may also be registered in other countries."
         )
         
         st.divider()
@@ -730,8 +737,10 @@ def main():
         # Timestamp and metadata
         st.markdown("### Dataset Information")
         st.caption(
-            f"**Last Updated:** {metadata.get('last_updated_timestamp', 'N/A')}\n"
-            f"**Total Records:** {metadata['record_count']}\n"
+            f"**CSV modified:** {metadata.get('last_updated_timestamp', 'N/A')}\n"
+            f"**Registry fetch time:** {metadata.get('source_last_fetched') or 'N/A'}\n"
+            f"**Total records:** {metadata['record_count']}\n"
+            f"**Source:** {metadata.get('source_label', 'Unverified')}\n"
             f"**File:** india_trials_clean.csv"
         )
         
@@ -739,8 +748,8 @@ def main():
         
         st.markdown("### About")
         st.caption(
-            "India Clinical Trials Intelligence Dashboard v2.1 | "
-            "Built with Streamlit, Plotly & Real Clinical Data"
+            f"India Clinical Trials Intelligence Dashboard | "
+            f"Streamlit + Plotly | Source: {metadata.get('source_label', 'Unverified')}"
         )
     
     # Route to selected page
