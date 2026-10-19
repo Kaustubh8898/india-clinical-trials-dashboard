@@ -54,7 +54,6 @@ Path("logs").mkdir(parents=True, exist_ok=True)
 
 PHASE_STANDARDIZATION = {
     "early phase 1": "Early Phase 1", "early_phase1": "Early Phase 1",
-    "early phase 1": "Early Phase 1",
     "phase 1": "Phase 1", "phase1": "Phase 1",
     "phase i": "Phase 1", "phasei": "Phase 1", "1": "Phase 1",
     "phase 2": "Phase 2", "phase2": "Phase 2",
