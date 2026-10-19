@@ -127,11 +127,14 @@ def load_clinical_trials_data() -> Tuple[Optional[pd.DataFrame], Dict[str, Any]]
         if bool(ids.duplicated().any()):
             metadata["verification_issues"].append("Duplicate NCT IDs were found.")
 
+        expected_urls = "https://clinicaltrials.gov/study/" + ids.astype("string")
         provenance_ok = (
             "data_source" in df.columns
-            and df["data_source"].astype("string").str.strip().eq("ClinicalTrials.gov API v2").all()
+            and df["data_source"].astype("string").str.strip()
+                .eq("ClinicalTrials.gov API v2").fillna(False).all()
             and "source_url" in df.columns
-            and df["source_url"].astype("string").str.startswith("https://clinicaltrials.gov/study/NCT", na=False).all()
+            and df["source_url"].astype("string").str.strip()
+                .eq(expected_urls).fillna(False).all()
         )
         if not provenance_ok:
             metadata["verification_issues"].append(
