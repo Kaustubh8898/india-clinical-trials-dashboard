@@ -5,6 +5,7 @@ import pytest
 
 from src.cleaning.clean_trials import TrialDataCleaner
 from src.data_loader import apply_filters, get_data_summary
+from src.visualizations import plot_enrollment_by_phase
 from src.ingestion.clinical_trials_api import (
     ClinicalTrialsAPIClient,
     extract_trial_record,
@@ -188,3 +189,15 @@ def test_cleaner_preserves_legal_suffixes_in_sponsor_names():
     cleaner.df = pd.DataFrame({"sponsor": ["Example Ltd.", "  Example   Ltd.  "]})
     cleaner.standardize_sponsor_names()
     assert cleaner.df["sponsor"].tolist() == ["Example Ltd.", "Example Ltd."]
+
+
+def test_enrollment_by_phase_uses_cleaned_dataset_column():
+    frame = pd.DataFrame({
+        "phase": ["Phase 1", "Phase 2", "Phase 2", "Phase 3"],
+        "enrollment_count": [20, 50, 75, 120],
+    })
+
+    figure = plot_enrollment_by_phase(frame)
+
+    assert figure.layout.yaxis.title.text == "Registry Enrollment Count"
+    assert len(figure.data) == 3
