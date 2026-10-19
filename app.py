@@ -117,10 +117,33 @@ def render_overview_dashboard():
         )
         st.caption(f"{active_share:.1f}% of filtered studies")
 
+    # Defensive fallback for Streamlit deployments with a stale cached
+    # src.data_loader module that predates the active_sponsors summary field.
+    active_sponsors_value = filtered_stats.get("active_sponsors")
+    if active_sponsors_value is None:
+        statuses = filtered_df.get(
+            "recruitment_status", pd.Series("", index=filtered_df.index)
+        ).astype("string").str.casefold()
+        active_mask = statuses.isin([
+            "recruiting", "enrolling by invitation",
+            "active, not recruiting", "active not recruiting"
+        ])
+        sponsors = filtered_df.get(
+            "sponsor", pd.Series(index=filtered_df.index, dtype="string")
+        ).astype("string").str.strip()
+        known_sponsor_mask = (
+            sponsors.notna()
+            & sponsors.ne("")
+            & sponsors.str.casefold().ne("unknown")
+        ).fillna(False)
+        active_sponsors_value = int(
+            sponsors[active_mask & known_sponsor_mask].nunique()
+        )
+
     with col2:
         st.metric(
             label="Active Sponsors",
-            value=filtered_stats["active_sponsors"],
+            value=active_sponsors_value,
             help="Distinct sponsors with at least one active trial in the filtered dataset."
         )
     
