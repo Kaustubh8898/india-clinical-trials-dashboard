@@ -45,7 +45,7 @@ LOGS_DIR.mkdir(parents=True, exist_ok=True)
 # API CONFIGURATION
 # ============================================================================
 
-API_BASE_URL: Final[str] = "http://localhost:8000"
+API_BASE_URL: Final[str] = "https://clinicaltrials.gov/api/v2/studies"
 API_TIMEOUT: Final[int] = 30  # seconds
 
 # ============================================================================
@@ -114,11 +114,15 @@ ENABLE_EXPORT: Final[bool] = True
 # CLINICAL TRIAL SPECIFIC CONFIGURATION
 # ============================================================================
 
-TRIAL_PHASES: Final[list[str]] = ["Phase I", "Phase II", "Phase III", "Phase IV"]
+TRIAL_PHASES: Final[list[str]] = [
+    "Early Phase 1", "Phase 1", "Phase 2", "Phase 3", "Phase 4", "Not Applicable", "Unknown"
+]
 
 RECRUITMENT_STATUSES: Final[list[str]] = [
-    "Recruiting", "Active, not recruiting", "Enrolling by invitation",
-    "Completed", "Suspended", "Terminated"
+    "Recruiting", "Not yet recruiting", "Active, not recruiting",
+    "Enrolling by invitation", "Completed", "Suspended", "Terminated",
+    "Withdrawn", "Unknown", "No longer available", "Available",
+    "Temporarily not available"
 ]
 
 THERAPEUTIC_AREAS: Final[list[str]] = [
@@ -128,16 +132,19 @@ THERAPEUTIC_AREAS: Final[list[str]] = [
 ]
 
 INDIAN_STATES: Final[list[str]] = [
-    "Maharashtra", "Delhi", "Karnataka", "Telangana", "Tamil Nadu",
-    "West Bengal", "Gujarat", "Rajasthan", "Uttar Pradesh", "Punjab",
-    "Kerala", "Haryana", "Madhya Pradesh", "Odisha"
+    "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh",
+    "Goa", "Gujarat", "Haryana", "Himachal Pradesh", "Jharkhand", "Karnataka",
+    "Kerala", "Madhya Pradesh", "Maharashtra", "Manipur", "Meghalaya",
+    "Mizoram", "Nagaland", "Odisha", "Punjab", "Rajasthan", "Sikkim",
+    "Tamil Nadu", "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand",
+    "West Bengal", "Delhi", "Jammu and Kashmir", "Ladakh"
 ]
 
 # Dashboard descriptions
 DASHBOARD_DESCRIPTION: Final[str] = (
-    "Monitor and analyze clinical trials across India in real-time. "
-    "Track sponsor activity, therapeutic areas, geographic distribution, "
-    "and recruitment metrics."
+    "Explore a dated ClinicalTrials.gov registry snapshot for studies with "
+    "Indian locations. Track sponsor activity, therapeutic areas, site "
+    "distribution, and recruitment status. Refresh the pipeline to update data."
 )
 
 SPONSOR_INTELLIGENCE_DESCRIPTION: Final[str] = (
