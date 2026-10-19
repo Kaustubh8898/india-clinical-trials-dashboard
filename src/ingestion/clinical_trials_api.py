@@ -75,6 +75,7 @@ STATUS_LABELS = {
 }
 
 PHASE_LABELS = {
+    "EARLY_PHASE1": "Early Phase 1",
     "PHASE1": "Phase 1",
     "PHASE2": "Phase 2",
     "PHASE3": "Phase 3",
@@ -178,7 +179,7 @@ class ClinicalTrialsAPIClient:
         while True:
             params: Dict[str, Any] = {
                 "pageSize": self.page_size,
-                "filter.advanced": "AREA[LocationCountry]India",
+                "filter.advanced": 'AREA[LocationCountry]"India"',
                 "fields": API_FIELDS,
                 "format": "json",
                 "countTotal": "true",
@@ -273,6 +274,11 @@ def extract_trial_record(study: Dict[str, Any]) -> Dict[str, Any]:
         "country": locations["country"],
         "india_site_count": locations["india_site_count"],
         "fetched_date": datetime.now().isoformat(timespec="seconds"),
+        "data_source": "ClinicalTrials.gov API v2",
+        "source_url": (
+            f"https://clinicaltrials.gov/study/{identification.get('nctId')}"
+            if identification.get("nctId") else None
+        ),
     }
 
 
