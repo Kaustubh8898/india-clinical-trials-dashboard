@@ -110,7 +110,7 @@ def test_summary_uses_active_sponsors_and_active_area():
         "sponsor": ["Acme", "Acme", "Beta", "Gamma"],
         "phase": ["Phase 3", "Phase 2", "Phase 1", "Unknown"],
         "conditions": ["c1", "c2", "c3", "c4"],
-        "recruitment_status": ["Recruiting", "Active, not recruiting", "Completed", "Not yet recruiting"],
+        "recruitment_status": ["Recruiting", "Active, not recruiting", "Completed", "Enrolling by invitation"],
         "start_date": pd.to_datetime(["2022-01-01"] * 4),
         "completion_date": pd.to_datetime(["2023-01-01"] * 4),
         "enrollment_count": [5, 10, 20, None],
@@ -126,10 +126,10 @@ def test_summary_uses_active_sponsors_and_active_area():
 
     summary = get_data_summary(frame)
     assert summary["total_trials"] == 4
-    assert summary["active_trials"] == 2
+    assert summary["active_trials"] == 3
     assert summary["recruiting_trials"] == 1
     assert summary["total_sponsors"] == 3
-    assert summary["active_sponsors"] == 1
+    assert summary["active_sponsors"] == 2
     assert summary["most_active_area"] == "Oncology"
     assert summary["avg_duration_days"] == 548
     assert summary["total_enrollment"] == 35
@@ -154,3 +154,18 @@ def test_filters_apply_year_and_sponsor():
     })
     assert len(result) == 1
     assert result.iloc[0]["sponsor"] == "Acme"
+
+
+def test_unknown_sponsor_is_not_counted_as_a_distinct_sponsor():
+    frame = pd.DataFrame({
+        "sponsor": ["Acme", "Unknown"],
+        "recruitment_status": ["Recruiting", "Recruiting"],
+        "therapeutic_area": ["Oncology", "Oncology"],
+        "state": ["Maharashtra", "Delhi"],
+        "city": ["Pune", "Delhi"],
+        "trial_duration_days": [100, 200],
+        "enrollment_count": [10, 20],
+    })
+    summary = get_data_summary(frame)
+    assert summary["total_sponsors"] == 1
+    assert summary["active_sponsors"] == 1
