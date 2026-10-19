@@ -29,7 +29,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[
-        logging.FileHandler("logs/data_cleaning.log"),
+        logging.FileHandler(LOG_DIR / "data_cleaning.log"),
         logging.StreamHandler()
     ]
 )
@@ -53,6 +53,8 @@ Path("logs").mkdir(parents=True, exist_ok=True)
 # ============================================================================
 
 PHASE_STANDARDIZATION = {
+    "early phase 1": "Early Phase 1", "early_phase1": "Early Phase 1",
+    "early phase 1": "Early Phase 1",
     "phase 1": "Phase 1", "phase1": "Phase 1",
     "phase i": "Phase 1", "phasei": "Phase 1", "1": "Phase 1",
     "phase 2": "Phase 2", "phase2": "Phase 2",
@@ -214,7 +216,8 @@ class TrialDataCleaner:
             required_columns = {
                 "nct_id", "brief_title", "sponsor", "phase", "conditions",
                 "recruitment_status", "start_date", "completion_date",
-                "enrollment_count", "city", "state", "country", "fetched_date"
+                "enrollment_count", "city", "state", "country", "fetched_date",
+                "data_source", "source_url"
             }
             missing_columns = required_columns - set(self.df.columns)
             if missing_columns:
@@ -226,10 +229,19 @@ class TrialDataCleaner:
                 raise ValueError("Raw dataset contains no records.")
 
             ids = self.df["nct_id"].astype("string").str.strip()
-            valid_ids = ids.str.fullmatch(r"(NCT\d{8}|DEMO-\d{4,})", na=False)
+            valid_ids = ids.str.fullmatch(r"NCT\d{8}", na=False)
             if not valid_ids.all():
                 examples = ids[~valid_ids].head(5).tolist()
-                raise ValueError(f"Invalid or missing trial identifiers: {examples}")
+                raise ValueError(f"Invalid or missing NCT identifiers: {examples}")
+
+            sources = self.df["data_source"].astype("string").str.strip()
+            if not sources.eq("ClinicalTrials.gov API v2").fillna(False).all():
+                raise ValueError("Raw data is missing the expected ClinicalTrials.gov API v2 source marker.")
+
+            expected_urls = "https://clinicaltrials.gov/study/" + ids.astype("string")
+            actual_urls = self.df["source_url"].astype("string").str.strip()
+            if not actual_urls.eq(expected_urls).fillna(False).all():
+                raise ValueError("Source URL does not match the NCT ID for every row.")
 
             logger.info(f"Loaded {self.original_row_count} rows from {self.input_file}")
             logger.info(f"Columns: {list(self.df.columns)}")
@@ -572,11 +584,13 @@ class TrialDataCleaner:
             return None
         
         output_file = output_file or (PROCESSED_DATA_DIR / OUTPUT_FILENAME)
-        
+
         try:
             output_file.parent.mkdir(parents=True, exist_ok=True)
-            self.df.to_csv(output_file, index=False)
-            
+            temporary_file = output_file.with_suffix(output_file.suffix + ".tmp")
+            self.df.to_csv(temporary_file, index=False)
+            temporary_file.replace(output_file)
+
             logger.info(f"Saved {len(self.df)} cleaned records to {output_file}")
             
             return output_file
