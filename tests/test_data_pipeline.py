@@ -89,6 +89,7 @@ def test_cleaner_tracks_precision_before_calculating_duration():
     assert cleaner.df.loc[0, "start_date_precision"] == "day"
     assert cleaner.df.loc[0, "trial_duration_days"] == 365
     assert cleaner.df.loc[1, "start_date_precision"] == "year"
+    assert cleaner.df.loc[1, "start_date"].year == 2022
     assert pd.isna(cleaner.df.loc[1, "trial_duration_days"])
 
 
