@@ -18,6 +18,12 @@ from typing import Optional, Dict, List, Tuple
 import re
 import sys
 
+# Create the log directory before registering a FileHandler; this must work
+# in a fresh checkout where logs/ is not present yet.
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+LOG_DIR = PROJECT_ROOT / "logs"
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -47,33 +53,40 @@ Path("logs").mkdir(parents=True, exist_ok=True)
 # ============================================================================
 
 PHASE_STANDARDIZATION = {
-    "phase 1": "Phase 1",
-    "phase i": "Phase 1",
-    "1": "Phase 1",
-    "phase 2": "Phase 2",
-    "phase ii": "Phase 2",
-    "2": "Phase 2",
-    "phase 3": "Phase 3",
-    "phase iii": "Phase 3",
-    "3": "Phase 3",
-    "phase 4": "Phase 4",
-    "phase iv": "Phase 4",
-    "4": "Phase 4",
+    "phase 1": "Phase 1", "phase1": "Phase 1",
+    "phase i": "Phase 1", "phasei": "Phase 1", "1": "Phase 1",
+    "phase 2": "Phase 2", "phase2": "Phase 2",
+    "phase ii": "Phase 2", "phaseii": "Phase 2", "2": "Phase 2",
+    "phase 3": "Phase 3", "phase3": "Phase 3",
+    "phase iii": "Phase 3", "phaseiii": "Phase 3", "3": "Phase 3",
+    "phase 4": "Phase 4", "phase4": "Phase 4",
+    "phase iv": "Phase 4", "phaseiv": "Phase 4", "4": "Phase 4",
     "not applicable": "Not Applicable",
-    "n/a": "Not Applicable",
+    "not_applicable": "Not Applicable",
+    "n/a": "Not Applicable", "na": "Not Applicable",
     "": "Unknown",
 }
 
 RECRUITMENT_STATUS_STANDARDIZATION = {
     "recruiting": "Recruiting",
     "active, not recruiting": "Active, not recruiting",
+    "active not recruiting": "Active, not recruiting",
+    "active_not_recruiting": "Active, not recruiting",
     "enrolling by invitation": "Enrolling by invitation",
+    "enrolling_by_invitation": "Enrolling by invitation",
     "not yet recruiting": "Not yet recruiting",
+    "not_yet_recruiting": "Not yet recruiting",
     "suspended": "Suspended",
     "terminated": "Terminated",
     "completed": "Completed",
     "unknown": "Unknown",
+    "unknown_status": "Unknown",
     "withdrawn": "Withdrawn",
+    "no longer available": "No longer available",
+    "no_longer_available": "No longer available",
+    "available": "Available",
+    "temporarily not available": "Temporarily not available",
+    "temporarily_not_available": "Temporarily not available",
     "": "Unknown",
 }
 
@@ -197,7 +210,27 @@ class TrialDataCleaner:
             
             self.df = pd.read_csv(self.input_file)
             self.original_row_count = len(self.df)
-            
+
+            required_columns = {
+                "nct_id", "brief_title", "sponsor", "phase", "conditions",
+                "recruitment_status", "start_date", "completion_date",
+                "enrollment_count", "city", "state", "country", "fetched_date"
+            }
+            missing_columns = required_columns - set(self.df.columns)
+            if missing_columns:
+                raise ValueError(
+                    "Raw dataset is missing required columns: "
+                    + ", ".join(sorted(missing_columns))
+                )
+            if self.df.empty:
+                raise ValueError("Raw dataset contains no records.")
+
+            ids = self.df["nct_id"].astype("string").str.strip()
+            valid_ids = ids.str.fullmatch(r"(NCT\d{8}|DEMO-\d{4,})", na=False)
+            if not valid_ids.all():
+                examples = ids[~valid_ids].head(5).tolist()
+                raise ValueError(f"Invalid or missing trial identifiers: {examples}")
+
             logger.info(f"Loaded {self.original_row_count} rows from {self.input_file}")
             logger.info(f"Columns: {list(self.df.columns)}")
             
@@ -332,11 +365,13 @@ class TrialDataCleaner:
         for col in date_columns:
             if col in self.df.columns:
                 try:
-                    self.df[col] = pd.to_datetime(
-                        self.df[col],
-                        format="%Y-%m-%d",
-                        errors="coerce"
-                    )
+                    raw_values = self.df[col].astype("string").str.strip()
+                    precision = pd.Series("unknown", index=self.df.index, dtype="string")
+                    precision.loc[raw_values.str.fullmatch(r"\d{4}", na=False)] = "year"
+                    precision.loc[raw_values.str.fullmatch(r"\d{4}-\d{2}", na=False)] = "month"
+                    precision.loc[raw_values.str.fullmatch(r"\d{4}-\d{2}-\d{2}", na=False)] = "day"
+                    self.df[f"{col}_precision"] = precision
+                    self.df[col] = pd.to_datetime(raw_values, errors="coerce")
                     
                     null_count = self.df[col].isna().sum()
                     if null_count > 0:
@@ -358,9 +393,16 @@ class TrialDataCleaner:
         def calculate_duration(row):
             if pd.isna(row["start_date"]) or pd.isna(row["completion_date"]):
                 return None
-            
+
+            # Registry dates may specify only year/month precision. Only
+            # calculate day-level duration when both dates specify a full day.
+            if "start_date_precision" in row.index and row["start_date_precision"] != "day":
+                return None
+            if "completion_date_precision" in row.index and row["completion_date_precision"] != "day":
+                return None
+
             duration = (row["completion_date"] - row["start_date"]).days
-            return duration if duration > 0 else None
+            return duration if duration >= 0 else None
         
         self.df["trial_duration_days"] = self.df.apply(
             calculate_duration, axis=1
@@ -393,30 +435,44 @@ class TrialDataCleaner:
     
     def validate_india_location(self) -> None:
         """
-        Create india_only_trial column verifying India location.
-        
-        Validates that state is in list of Indian states.
+        Add has_indian_location using country, site-count, or state evidence.
+
+        This does not claim a study is India-only; a multinational study can
+        include Indian sites.
         """
         if self.df is None:
             return
-        
-        def is_india_trial(state):
-            if pd.isna(state):
-                return False
-            
-            state_lower = str(state).lower().strip()
-            return state_lower in INDIAN_STATES
-        
-        self.df["india_only_trial"] = self.df["state"].apply(is_india_trial)
-        
-        india_trials = self.df["india_only_trial"].sum()
-        total_trials = len(self.df)
-        
-        logger.info(
-            f"India-verified trials: {india_trials}/{total_trials} "
-            f"({india_trials/total_trials*100:.1f}%)"
+
+        country_evidence = (
+            self.df["country"].astype("string").str.strip().str.casefold().eq("india")
+            if "country" in self.df.columns
+            else pd.Series(False, index=self.df.index)
         )
-        self.cleaning_report["india_verified_count"] = india_trials
+        state_evidence = (
+            self.df["state"].astype("string").str.strip().str.casefold().isin(INDIAN_STATES)
+            if "state" in self.df.columns
+            else pd.Series(False, index=self.df.index)
+        )
+        if "india_site_count" in self.df.columns:
+            site_count = pd.to_numeric(
+                self.df["india_site_count"], errors="coerce"
+            ).fillna(0)
+            site_evidence = site_count.gt(0)
+        else:
+            site_evidence = pd.Series(False, index=self.df.index)
+
+        self.df["has_indian_location"] = (
+            country_evidence | state_evidence | site_evidence
+        ).astype(bool)
+
+        india_trials = int(self.df["has_indian_location"].sum())
+        total_trials = len(self.df)
+        percentage = india_trials / total_trials * 100 if total_trials else 0.0
+        logger.info(
+            "Records with Indian-location evidence: %s/%s (%.1f%%)",
+            india_trials, total_trials, percentage
+        )
+        self.cleaning_report["has_indian_location_count"] = india_trials
     
     def handle_missing_values(self) -> None:
         """Handle and report missing values in key columns."""
@@ -448,7 +504,8 @@ class TrialDataCleaner:
         type_conversions = {
             "enrollment_count": "Int64",  # Nullable integer
             "trial_duration_days": "Int64",
-            "india_only_trial": "bool"
+            "has_indian_location": "bool",
+            "india_site_count": "Int64"
         }
         
         for col, dtype in type_conversions.items():
