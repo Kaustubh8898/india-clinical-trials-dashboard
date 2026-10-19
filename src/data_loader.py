@@ -199,7 +199,10 @@ def get_data_summary(df: Optional[pd.DataFrame], metadata: Optional[Dict[str, An
 
     statuses = df.get("recruitment_status", pd.Series("", index=df.index)).astype("string").str.casefold()
     recruiting_mask = statuses.eq("recruiting")
-    active_mask = statuses.isin(["recruiting", "active, not recruiting", "active not recruiting"])
+    active_mask = statuses.isin([
+        "recruiting", "enrolling by invitation",
+        "active, not recruiting", "active not recruiting"
+    ])
     completed_mask = statuses.eq("completed")
 
     def unique_count(column: str) -> int:
@@ -208,7 +211,21 @@ def get_data_summary(df: Optional[pd.DataFrame], metadata: Optional[Dict[str, An
     def first_value(series: pd.Series) -> str:
         return str(series.index[0]) if not series.empty else "N/A"
 
-    sponsor_counts = df.get("sponsor", pd.Series(dtype="string")).dropna().value_counts()
+    if "sponsor" in df:
+        sponsor_values = df["sponsor"].astype("string").str.strip()
+        known_sponsor_mask = (
+            sponsor_values.notna()
+            & sponsor_values.ne("")
+            & sponsor_values.str.casefold().ne("unknown")
+        ).fillna(False)
+        sponsor_counts = sponsor_values[known_sponsor_mask].value_counts()
+        total_sponsors = int(sponsor_values[known_sponsor_mask].nunique())
+        active_sponsors = int(sponsor_values[active_mask & known_sponsor_mask].nunique())
+    else:
+        sponsor_counts = pd.Series(dtype="int64")
+        total_sponsors = 0
+        active_sponsors = 0
+
     area_counts = df.get("therapeutic_area", pd.Series(dtype="string")).dropna().value_counts()
     active_area_counts = df.loc[active_mask, "therapeutic_area"].dropna().value_counts() if "therapeutic_area" in df else pd.Series(dtype="int64")
     state_counts = df.get("state", pd.Series(dtype="string")).dropna().value_counts()
@@ -216,18 +233,13 @@ def get_data_summary(df: Optional[pd.DataFrame], metadata: Optional[Dict[str, An
     duration = pd.to_numeric(df.get("trial_duration_days", pd.Series(dtype="float64")), errors="coerce").dropna()
     enrollment = pd.to_numeric(df.get("enrollment_count", pd.Series(dtype="float64")), errors="coerce")
 
-    active_sponsors = (
-        df.loc[active_mask, "sponsor"].dropna().nunique()
-        if "sponsor" in df else 0
-    )
-
     return {
         "total_trials": int(len(df)),
         "recruiting_trials": int(recruiting_mask.sum()),
         "active_trials": int(active_mask.sum()),
         "completed_trials": int(completed_mask.sum()),
-        "total_sponsors": unique_count("sponsor"),
-        "active_sponsors": int(active_sponsors),
+        "total_sponsors": total_sponsors,
+        "active_sponsors": active_sponsors,
         "total_areas": unique_count("therapeutic_area"),
         "total_states": unique_count("state"),
         "total_cities": unique_count("city"),
