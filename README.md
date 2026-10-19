@@ -1,99 +1,114 @@
-# Clinical Trials Analytics Dashboard
+# India Clinical Trials Intelligence Dashboard
 
-A Python-based Streamlit application for analyzing and visualizing clinical trial data. This dashboard provides interactive visualizations, cohort analysis, and key performance metrics for clinical trial oversight.
+A Streamlit + Plotly analytics dashboard for exploring public clinical-trial registry records with listed Indian study locations. The project includes a ClinicalTrials.gov API v2 ingestion pipeline, data-cleaning steps, sponsor and therapeutic-area summaries, geographic exploration, filters, and CSV export.
 
-## Features
+> **Data integrity note:** The CSV included in the original prototype is a legacy sample and does not contain the explicit provenance markers required by the current app. The dashboard intentionally refuses to present that file as verified registry data. Refresh it using the pipeline below before interpreting the charts or quoting any numbers.
 
-- **Interactive Dashboard**: Real-time metrics and visualizations
-- **Cohort Analysis**: Patient segmentation and demographic breakdowns
-- **Data Ingestion**: Support for CSV and Excel file uploads
-- **KPI Tracking**: Key performance indicators with drill-down capabilities
-- **Production-Ready**: Modular, scalable architecture with configuration management
+## What the dashboard does
 
-## Project Structure
+- Summarizes trials by recruitment status, phase, therapeutic area, sponsor, and location.
+- Lets users filter by phase, status, sponsor, state, therapeutic area, and start year.
+- Shows sponsor portfolio and enrollment summaries.
+- Exports filtered trial records as CSV.
+- Uses a dated registry snapshot. It is **not** a real-time feed.
+- Keeps one row per study; location columns describe the first listed Indian site, while the india_site_count field records the number of Indian sites found. Use a site-level table for analyses that require every site separately.
 
-```
-.
-├── app.py                    # Streamlit app entry point
-├── requirements.txt          # Python dependencies
-├── .gitignore               # Git ignore rules
-├── README.md                # This file
-├── src/
-│   ├── config.py            # Configuration constants
-│   ├── ingestion/           # Data loading scripts
-│   ├── cleaning/            # Data cleaning utilities
-│   ├── analytics/           # Analysis modules
-│   ├── visualization/       # Plotly charts
-│   └── utils/               # Helper functions
-├── data/
-│   ├── raw/                 # Original datasets
-│   └── processed/           # Cleaned data
-└── tests/                   # Unit tests
-```
+The dashboard contains registry metadata, not patient-level data, treatment-effect estimates, or evidence that a therapy is effective. Therapeutic-area categories are heuristic keyword labels based on registry condition text and should be treated as exploratory.
 
-## Getting Started
+## Data pipeline
 
-### Prerequisites
+    ClinicalTrials.gov API v2
+             |
+             v
+    data/raw/india_trials_raw.csv
+             |
+             v
+    src/cleaning/clean_trials.py
+             |
+             v
+    data/processed/india_trials_clean.csv
+             |
+             v
+    src/data_loader.py (schema + provenance checks)
+             |
+             v
+    Streamlit dashboard
 
-- Python 3.9+
-- pip or conda
+### 1. Install
 
-### Installation
+Python 3.10+ is recommended.
 
-1. Clone or create the project folder:
-```bash
-cd clinical_trials_dashboard
-```
+    python -m venv .venv
+    source .venv/bin/activate        # Windows: .venv\Scripts\activate
+    pip install -r requirements.txt
 
-2. Create a virtual environment:
-```bash
-python3 -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-```
+### 2. Refresh the registry snapshot
 
-3. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
+The API request is public and does not require an API key.
 
-### Running the Dashboard
+    python -m src.ingestion.clinical_trials_api
+    python -m src.cleaning.clean_trials
 
-```bash
-streamlit run app.py
-```
+Run these commands in order. The ingestion job will preserve the last raw CSV if a request fails or returns no records. The cleaner requires NCT-shaped IDs, a ClinicalTrials.gov API v2 source marker, and a source URL matching each record's NCT ID. It writes the processed CSV atomically.
 
-The app will launch at `http://localhost:8501`
+### 3. Start the dashboard
 
-## Configuration
+    streamlit run app.py
 
-Edit `src/config.py` to customize:
-- App title and branding
-- Default data paths
-- API endpoints
-- Visualization themes
+The app validates provenance before drawing charts. If validation fails, follow the error text and rerun the pipeline rather than bypassing the check.
 
-## Development
+### 4. Run tests
 
-### Adding a New Analysis Module
+Install development dependencies and execute the tests:
 
-1. Create a Python file in `src/analytics/`
-2. Import in `app.py`
-3. Add a corresponding sidebar navigation entry
-4. Use `src/config.py` for constants
+    pip install -r requirements-dev.txt
+    python -m pytest -q
 
-### Running Tests
+## Data fields and interpretation
 
-```bash
-pytest tests/
-```
+| Field | Meaning |
+|---|---|
+| nct_id | ClinicalTrials.gov study identifier |
+| source_url | Registry record URL derived from the same NCT ID |
+| data_source | Source marker written by the ingestion code |
+| fetched_date | Time this pipeline retrieved the study record |
+| phase | Registry phase enum normalized for display |
+| recruitment_status | Registry recruitment status normalized for display |
+| conditions | Registry condition labels joined into one string |
+| city, state, country | First listed Indian study site |
+| india_site_count | Number of Indian locations found for the study |
+| has_indian_location | Whether source location fields indicate at least one Indian site |
+| trial_duration_days | Derived only when both start and completion dates are reported at day precision and the range is non-negative |
+| therapeutic_area | Exploratory keyword-based grouping of condition labels |
 
-## Deployment
+The source marker is a traceability check, not an independent guarantee that the registry's content is clinically correct. For research or business decisions, open the source_url and verify individual records and the date of retrieval.
 
-For production deployment:
-1. Set up environment variables in `.env`
-2. Use `streamlit config.toml` for Streamlit settings
-3. Deploy via Streamlit Cloud, Docker, or AWS
+## Project structure
+
+    .
+    ├── app.py
+    ├── requirements.txt
+    ├── requirements-dev.txt
+    ├── src/
+    │   ├── config.py
+    │   ├── data_loader.py
+    │   ├── ingestion/clinical_trials_api.py
+    │   ├── cleaning/clean_trials.py
+    │   └── visualizations.py
+    ├── data/
+    │   ├── raw/
+    │   └── processed/
+    ├── tests/
+    └── DATA_QUALITY.md
+
+## Current limitations
+
+- Each row is a study, not an individual trial site. Geographic counts therefore reflect the first listed Indian location and may undercount site activity.
+- Therapeutic-area classification uses a keyword map and can misclassify conditions with ambiguous wording or assign uncommon conditions to Other.
+- Duration is unavailable unless both source dates specify a day. Year-only and month-only registry dates must not be interpreted as exact days.
+- Enrollment counts may be missing and represent registry enrollment fields, not necessarily final realized enrollment.
+- The dashboard does not calculate clinical efficacy, patient demographics, cohort outcomes, or causal treatment comparisons.
 
 ## License
 
-Proprietary - Clinical Trials Analytics
+No open-source license is currently specified. Contact the repository owner before reusing this project beyond permitted GitHub viewing and forking terms.
