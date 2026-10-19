@@ -192,10 +192,10 @@ def plot_enrollment_by_phase(df: pd.DataFrame) -> go.Figure:
     fig = px.box(
         df,
         x="phase",
-        y="enrollment",
+        y="enrollment_count",
         color="phase",
         title="Trial Enrollment Distribution by Phase",
-        labels={"phase": "Trial Phase", "enrollment": "Enrollment Size"},
+        labels={"phase": "Trial Phase", "enrollment_count": "Registry Enrollment Count"},
         template=PLOTLY_TEMPLATE
     )
     
