@@ -174,6 +174,7 @@ class ClinicalTrialsAPIClient:
         """
         all_trials: List[Dict[str, Any]] = []
         page_token: Optional[str] = None
+        expected_total: Optional[int] = None
         page_number = 1
 
         while True:
@@ -197,7 +198,8 @@ class ClinicalTrialsAPIClient:
 
             studies = response.get("studies", [])
             if page_number == 1 and response.get("totalCount") is not None:
-                logger.info("API reports %s matching records", response["totalCount"])
+                expected_total = int(response["totalCount"])
+                logger.info("API reports %s matching records", expected_total)
 
             all_trials.extend(studies)
             self.total_records_fetched += len(studies)
@@ -213,6 +215,22 @@ class ClinicalTrialsAPIClient:
             raise RuntimeError(
                 "The API returned no studies with Indian locations. "
                 "The existing dataset was not replaced."
+            )
+
+        # Do not replace a previous snapshot when paging returned an incomplete
+        # result set or the API unexpectedly repeated/missed a study identifier.
+        nct_ids = [
+            study.get("protocolSection", {}).get("identificationModule", {}).get("nctId")
+            for study in all_trials
+        ]
+        if any(not nct_id for nct_id in nct_ids):
+            raise RuntimeError("At least one API result is missing its NCT ID.")
+        if len(set(nct_ids)) != len(nct_ids):
+            raise RuntimeError("API pagination returned duplicate NCT IDs.")
+        if expected_total is not None and len(all_trials) != expected_total:
+            raise RuntimeError(
+                f"Expected {expected_total} studies from API totalCount, but fetched "
+                f"{len(all_trials)}. The existing dataset was not replaced."
             )
 
         logger.info("Fetched %s study records in total", len(all_trials))
