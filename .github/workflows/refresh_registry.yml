@@ -75,7 +75,7 @@ jobs:
           if missing:
               raise SystemExit(f"Processed dataset is missing columns: {sorted(missing)}")
           ids = df["nct_id"].astype("string").str.strip()
-          if not ids.str.fullmatch(r"NCT\\d{8}", na=False).all():
+          if not ids.str.fullmatch("NCT[0-9]{8}", na=False).all():
               raise SystemExit("Processed dataset contains malformed NCT IDs.")
           if ids.duplicated().any():
               raise SystemExit("Processed dataset contains duplicate NCT IDs.")
